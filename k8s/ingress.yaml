@@ -1,0 +1,67 @@
+# Ingress for Patient Web Interface
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: patient-web-interface-ingress
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: patient-web-interface.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: patient-web-interface-service
+            port:
+              number: 80
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: patient-web-interface-service
+            port:
+              number: 80
+---
+# NetworkPolicy for security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: patient-web-interface-netpol
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface
+spec:
+  podSelector:
+    matchLabels:
+      app: patient-web-interface
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 5000
+  egress:
+  - {}  # Allow all egress traffic

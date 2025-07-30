@@ -1,0 +1,232 @@
+# Patient Web Interface - Kubernetes Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: patient-web-interface
+  labels:
+    name: patient-web-interface
+    app: patient-web-interface
+    environment: production
+---
+# ConfigMap for application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: patient-app-config
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface
+data:
+  FLASK_ENV: "production"
+  FLASK_APP: "main.py"
+  DATABASE_URL: "sqlite:///instance/patient.db"
+  APP_PORT: "5000"
+---
+# Secret for sensitive data (base64 encoded)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: patient-app-secrets
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface
+type: Opaque
+data:
+  # Default secret key (change this in production)
+  # echo -n "your-secret-key-change-this" | base64
+  SECRET_KEY: eW91ci1zZWNyZXQta2V5LWNoYW5nZS10aGlz
+---
+# PersistentVolume for SQLite database
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: patient-db-pv
+  labels:
+    app: patient-web-interface
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  hostPath:
+    path: /tmp/patient-db
+---
+# PersistentVolumeClaim for SQLite database
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: patient-db-pvc
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-storage
+---
+# Deployment for Patient Web Interface
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: patient-web-interface
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface
+    version: v1.0.0
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: patient-web-interface
+  template:
+    metadata:
+      labels:
+        app: patient-web-interface
+        version: v1.0.0
+    spec:
+      containers:
+      - name: patient-web-interface
+        image: abdallahbagato/patient-web-interface:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5000
+          name: http
+          protocol: TCP
+        env:
+        - name: FLASK_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: patient-app-config
+              key: FLASK_ENV
+        - name: FLASK_APP
+          valueFrom:
+            configMapKeyRef:
+              name: patient-app-config
+              key: FLASK_APP
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: patient-app-secrets
+              key: SECRET_KEY
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: patient-app-config
+              key: DATABASE_URL
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: patient-app-config
+              key: APP_PORT
+        volumeMounts:
+        - name: patient-db-storage
+          mountPath: /app/instance
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: false
+          allowPrivilegeEscalation: false
+      volumes:
+      - name: patient-db-storage
+        persistentVolumeClaim:
+          claimName: patient-db-pvc
+      restartPolicy: Always
+      securityContext:
+        fsGroup: 1000
+---
+# Service for Patient Web Interface
+apiVersion: v1
+kind: Service
+metadata:
+  name: patient-web-interface-service
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface
+spec:
+  type: ClusterIP
+  selector:
+    app: patient-web-interface
+  ports:
+  - name: http
+    port: 80
+    targetPort: 5000
+    protocol: TCP
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: patient-web-interface-hpa
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: patient-web-interface
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 4
+        periodSeconds: 15
+      selectPolicy: Max

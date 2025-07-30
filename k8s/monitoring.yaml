@@ -1,0 +1,49 @@
+# ServiceMonitor for Prometheus monitoring (if Prometheus is installed)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: patient-web-interface-monitor
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: patient-web-interface
+  endpoints:
+  - port: http
+    interval: 30s
+    path: /metrics
+---
+# PodDisruptionBudget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: patient-web-interface-pdb
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: patient-web-interface
+---
+# Service for headless service (if needed for StatefulSet in future)
+apiVersion: v1
+kind: Service
+metadata:
+  name: patient-web-interface-headless
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface
+spec:
+  clusterIP: None
+  selector:
+    app: patient-web-interface
+  ports:
+  - name: http
+    port: 5000
+    targetPort: 5000
+    protocol: TCP

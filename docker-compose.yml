@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  web:
+    build: 
+      context: ./project
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+    volumes:
+      - ./project:/app
+      - /app/__pycache__
+    networks:
+      - patient-network
+
+networks:
+  patient-network:
+    driver: bridge
+
+volumes:
+  patient_data:

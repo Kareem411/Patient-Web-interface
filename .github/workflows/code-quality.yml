@@ -1,0 +1,127 @@
+name: Code Quality & Dependency Updates
+
+on:
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    name: Code Quality Analysis
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install code quality tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install black isort bandit mypy
+        cd project
+        pip install -r requirements.txt
+        
+    - name: Check code formatting with Black
+      run: |
+        cd project
+        black --check --diff .
+        
+    - name: Check import sorting with isort
+      run: |
+        cd project
+        isort --check-only --diff .
+        
+    - name: Run static analysis with Bandit
+      run: |
+        cd project
+        bandit -r . -f json -o bandit-report.json
+        
+    - name: Run type checking with MyPy
+      continue-on-error: true
+      run: |
+        cd project
+        mypy . --ignore-missing-imports
+        
+    - name: Upload Bandit report
+      uses: actions/upload-artifact@v3
+      with:
+        name: bandit-security-report
+        path: project/bandit-report.json
+
+  dependency-update:
+    runs-on: ubuntu-latest
+    name: Check for Dependency Updates
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install pip-audit
+      run: pip install pip-audit
+      
+    - name: Audit dependencies
+      run: |
+        cd project
+        pip-audit -r requirements.txt --format=json --output=audit-report.json
+        
+    - name: Upload audit report
+      uses: actions/upload-artifact@v3
+      with:
+        name: dependency-audit-report
+        path: project/audit-report.json
+
+  create-pr-for-updates:
+    runs-on: ubuntu-latest
+    name: Create PR for Code Quality Fixes
+    needs: code-quality
+    if: failure()
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install formatting tools
+      run: |
+        python -m pip install --upgrade pip
+        pip install black isort
+        
+    - name: Format code with Black
+      run: |
+        cd project
+        black .
+        
+    - name: Sort imports with isort
+      run: |
+        cd project
+        isort .
+        
+    - name: Create Pull Request
+      uses: peter-evans/create-pull-request@v5
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: 'style: Auto-format code with Black and isort'
+        title: 'Automated Code Formatting'
+        body: |
+          This PR contains automated code formatting changes:
+          - Code formatted with Black
+          - Imports sorted with isort
+          
+          Please review and merge if the changes look good.
+        branch: automated-formatting
+        delete-branch: true

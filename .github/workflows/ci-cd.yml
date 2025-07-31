@@ -228,7 +228,16 @@ jobs:
           echo "This is common in CI environments. Application will still be accessible via port-forward or NodePort."
         fi
         
-        kubectl apply -f monitoring.yaml
+        # Apply monitoring resources with error handling
+        echo "📊 Applying monitoring configuration..."
+        if kubectl apply -f monitoring-ci.yaml; then
+          echo "✅ CI monitoring resources applied successfully"
+        elif kubectl apply -f monitoring.yaml; then
+          echo "✅ Full monitoring resources applied successfully"
+        else
+          echo "⚠️ Monitoring application failed, continuing without monitoring..."
+          echo "This is common in CI environments without Prometheus Operator."
+        fi
         
         echo "⏳ Waiting for deployment to be ready..."
         kubectl wait --for=condition=available --timeout=300s deployment/patient-web-interface -n patient-web-interface

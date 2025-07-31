@@ -1,0 +1,58 @@
+# Simple deployment without volumes for testing
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: patient-web-interface-simple
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface-simple
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: patient-web-interface-simple
+  template:
+    metadata:
+      labels:
+        app: patient-web-interface-simple
+    spec:
+      containers:
+      - name: patient-web-interface
+        image: local-patient-web:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 5000
+        env:
+        - name: FLASK_ENV
+          value: "development"
+        - name: FLASK_APP
+          value: "main.py"
+        - name: SECRET_KEY
+          value: "dev-secret-key"
+        - name: DATABASE_URL
+          value: "sqlite:///instance/patient.db"
+        - name: PORT
+          value: "5000"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: patient-web-interface-simple-service
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface-simple
+spec:
+  type: ClusterIP
+  selector:
+    app: patient-web-interface-simple
+  ports:
+  - name: http
+    port: 80
+    targetPort: 5000

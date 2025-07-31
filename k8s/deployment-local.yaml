@@ -1,0 +1,108 @@
+# Local deployment for testing with local image
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: patient-web-interface-local
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface-local
+    version: v1.0.0-local
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: patient-web-interface-local
+  template:
+    metadata:
+      labels:
+        app: patient-web-interface-local
+        version: v1.0.0-local
+    spec:
+      initContainers:
+      - name: init-permissions
+        image: busybox:1.35
+        command: ['sh', '-c', 'chown -R 1000:1000 /app/instance && chmod -R 755 /app/instance']
+        volumeMounts:
+        - name: patient-db-storage
+          mountPath: /app/instance
+        securityContext:
+          runAsUser: 0  # Run as root to change ownership
+      containers:
+      - name: patient-web-interface
+        image: local-patient-web:latest
+        imagePullPolicy: Never  # Use local image
+        ports:
+        - containerPort: 5000
+          name: http
+          protocol: TCP
+        env:
+        - name: FLASK_ENV
+          value: "development"
+        - name: FLASK_APP
+          value: "main.py"
+        - name: SECRET_KEY
+          value: "dev-secret-key-change-this"
+        - name: DATABASE_URL
+          value: "sqlite:///instance/patient.db"
+        - name: PORT
+          value: "5000"
+        volumeMounts:
+        - name: patient-db-storage
+          mountPath: /app/instance
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: false
+          allowPrivilegeEscalation: false
+      volumes:
+      - name: patient-db-storage
+        emptyDir: {}  # Use emptyDir for local testing
+      restartPolicy: Always
+      securityContext:
+        fsGroup: 1000
+---
+# Service for local deployment
+apiVersion: v1
+kind: Service
+metadata:
+  name: patient-web-interface-local-service
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface-local
+spec:
+  type: ClusterIP
+  selector:
+    app: patient-web-interface-local
+  ports:
+  - name: http
+    port: 80
+    targetPort: 5000
+    protocol: TCP

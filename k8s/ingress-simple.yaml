@@ -1,0 +1,23 @@
+# Simple Ingress for Patient Web Interface (CI-friendly)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: patient-web-interface-ingress
+  namespace: patient-web-interface
+  labels:
+    app: patient-web-interface
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: patient-web-interface-service
+            port:
+              number: 80

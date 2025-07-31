@@ -3,15 +3,12 @@ from signup import Signup, Search
 from flask_sqlalchemy import SQLAlchemy
 import os
 
+# Create the Flask app and database instances
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', '123456')  # add secret key CSR
 
-# Set default database URI, but allow it to be overridden by tests
-if not app.config.get('SQLALCHEMY_DATABASE_URI'):
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get('DATABASE_URL', 'sqlite:///instance/patient.db')
-
-db = SQLAlchemy(app)
-
+# Initialize SQLAlchemy without binding to app yet
+db = SQLAlchemy()
 
 class Patient(db.Model):
     __tablename__ = "Patient"
@@ -23,80 +20,106 @@ class Patient(db.Model):
     Lname = db.Column(db.String)
     BD = db.Column(db.TEXT)
 
+def create_app(config_overrides=None):
+    """Application factory function for better testing"""
+    app = Flask(__name__)
+    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', '123456')
+    
+    # Set default database URI
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get('DATABASE_URL', 'sqlite:///instance/patient.db')
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    
+    # Apply any config overrides (useful for testing)
+    if config_overrides:
+        app.config.update(config_overrides)
+    
+    # Initialize extensions
+    db.init_app(app)
+    
+    # Register routes
+    register_routes(app)
+    
+    return app
 
-@app.route('/', methods=["GET"])
-def mainpage():
-    return render_template('main.html', main='Main Page')
+def register_routes(app):
+    """Register all routes with the given app"""
+    @app.route('/', methods=["GET"])
+    def mainpage():
+        return render_template('main.html', main='Main Page')
 
-
-@app.route('/health', methods=["GET"])
-def health_check():
-    """Health check endpoint for Kubernetes"""
-    try:
-        # Try a simple database operation
-        with app.app_context():
-            db.engine.execute('SELECT 1')
-        return {'status': 'healthy', 'database': 'connected'}, 200
-    except Exception as e:
-        return {'status': 'healthy', 'database': 'disconnected', 'error': str(e)}, 200
-
-
-@app.route('/signup', methods=["POST", "GET"])
-def signup():
-    form = Signup()
-    if request.method == 'GET':
-        return render_template('signup.html', form=form)
-    elif request.method == 'POST' and form.validate_on_submit():
+    @app.route('/health', methods=["GET"])
+    def health_check():
+        """Health check endpoint for Kubernetes"""
         try:
-            NID = form.NID.data
-            patient = Patient.query.filter_by(NID=form.NID.data).first()
-            password = form.password.data
-            if (patient is None) and (password == form.Re_password.data):
-                username = form.username.data
-                email = form.email.data
-                Fname = form.Fname.data
-                Lname = form.Lname.data
-                BD = form.BD.data
-                patient = Patient(
-                    NID=NID,
-                    username=username,
-                    password=password,
-                    mail=email,
-                    Fname=Fname,
-                    Lname=Lname,
-                    BD=BD
-                )
-                db.session.add(patient)
-                db.session.commit()
-                value = (f'user is {username} <br> UID is {NID} <br> '
-                         f'mail is {email} <br> Fname is {Fname} <br> '
-                         f'Lname is {Lname} <br> Birthday is {BD}')
-                return render_template('out.html', output=value, Statues="This User is added")
-            else:
-                return render_template('signup.html', form=form, value="This id is already IN")
+            # Try a simple database operation
+            with app.app_context():
+                db.engine.execute('SELECT 1')
+            return {'status': 'healthy', 'database': 'connected'}, 200
         except Exception as e:
-            print(f"Database error in signup: {e}")
-            return render_template('signup.html', form=form, error='Database error occurred. Please try again later.')
-    else:
-        return render_template('signup.html', form=form)
+            return {'status': 'healthy', 'database': 'disconnected', 'error': str(e)}, 200
 
+    @app.route('/signup', methods=["POST", "GET"])
+    def signup():
+        form = Signup()
+        if request.method == 'GET':
+            return render_template('signup.html', form=form)
+        elif request.method == 'POST' and form.validate_on_submit():
+            try:
+                NID = form.NID.data
+                patient = Patient.query.filter_by(NID=form.NID.data).first()
+                password = form.password.data
+                if (patient is None) and (password == form.Re_password.data):
+                    username = form.username.data
+                    email = form.email.data
+                    Fname = form.Fname.data
+                    Lname = form.Lname.data
+                    BD = form.BD.data
+                    patient = Patient(
+                        NID=NID,
+                        username=username,
+                        password=password,
+                        mail=email,
+                        Fname=Fname,
+                        Lname=Lname,
+                        BD=BD
+                    )
+                    db.session.add(patient)
+                    db.session.commit()
+                    value = (f'user is {username} <br> UID is {NID} <br> '
+                             f'mail is {email} <br> Fname is {Fname} <br> '
+                             f'Lname is {Lname} <br> Birthday is {BD}')
+                    return render_template('out.html', output=value, Statues="This User is added")
+                else:
+                    return render_template('signup.html', form=form, value="This id is already IN")
+            except Exception as e:
+                print(f"Database error in signup: {e}")
+                return render_template('signup.html', form=form, error='Database error occurred. Please try again later.')
+        else:
+            return render_template('signup.html', form=form)
 
-@app.route('/search', methods=["POST", "GET"])
-def search():
-    form = Search()
-    if request.method == 'GET':
-        return render_template('search.html', form=form)
-    elif request.method == 'POST':
-        try:
-            patient = Patient.query.filter_by(NID=form.NID.data).first()
-            if patient is None:
-                return render_template('out.html', output="Cant Find a User")
-            value = (f'User is {patient.username} <br> UID is {patient.NID} <br> '
-                     f'Mail is {patient.mail}')
-            return render_template('out.html', output=value)
-        except Exception as e:
-            print(f"Database error in search: {e}")
-            return render_template('search.html', form=form, error='Database error occurred. Please try again later.')
+    @app.route('/search', methods=["POST", "GET"])
+    def search():
+        form = Search()
+        if request.method == 'GET':
+            return render_template('search.html', form=form)
+        elif request.method == 'POST':
+            try:
+                patient = Patient.query.filter_by(NID=form.NID.data).first()
+                if patient is None:
+                    return render_template('out.html', output="Cant Find a User")
+                value = (f'User is {patient.username} <br> UID is {patient.NID} <br> '
+                         f'Mail is {patient.mail}')
+                return render_template('out.html', output=value)
+            except Exception as e:
+                print(f"Database error in search: {e}")
+                return render_template('search.html', form=form, error='Database error occurred. Please try again later.')
+
+# Configure the default app for non-test usage
+if not app.config.get('TESTING', False):
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get('DATABASE_URL', 'sqlite:///instance/patient.db')
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    db.init_app(app)
+    register_routes(app)
 
 
 if __name__ == "__main__":

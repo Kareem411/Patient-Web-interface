@@ -103,7 +103,7 @@ jobs:
       id: meta
       uses: docker/metadata-action@v5
       with:
-        images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+        images: ${{ env.REGISTRY }}/${{ github.repository }}
         tags: |
           type=ref,event=branch
           type=ref,event=pr
@@ -122,13 +122,28 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
         
+    - name: Debug image information
+      if: github.event_name != 'pull_request'
+      run: |
+        echo "Repository: ${{ github.repository }}"
+        echo "Repository owner: ${{ github.repository_owner }}"
+        echo "Registry: ${{ env.REGISTRY }}"
+        echo "Image name: ${{ env.IMAGE_NAME }}"
+        echo "Expected image: ${{ env.REGISTRY }}/${{ github.repository }}:latest"
+        echo "Generated tags: ${{ steps.meta.outputs.tags }}"
+        
+        # Extract the first tag (which should be the latest tag)
+        FIRST_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+        echo "TRIVY_IMAGE_REF=$FIRST_TAG" >> $GITHUB_ENV
+        
     - name: Run Trivy vulnerability scanner
       if: github.event_name != 'pull_request'
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+        image-ref: ${{ env.TRIVY_IMAGE_REF }}
         format: 'sarif'
         output: 'trivy-results.sarif'
+        exit-code: '0'  # Don't fail the build on vulnerabilities, just report them
         
     - name: Upload Trivy scan results to GitHub Security tab
       if: github.event_name != 'pull_request'

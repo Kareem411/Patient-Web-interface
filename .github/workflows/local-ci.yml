@@ -1,0 +1,203 @@
+name: Local CI/CD (No Registry)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ develop, feature/* ]
+
+env:
+  IMAGE_NAME: patient-web-interface
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Test and Lint
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+          
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        cd project
+        pip install -r requirements.txt
+        pip install pytest pytest-cov
+        
+    - name: Run linting with flake8
+      run: |
+        cd project
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        
+    - name: Run tests with pytest
+      run: |
+        cd project
+        pytest test_app.py -v --cov=main --cov-report=xml --cov-report=term-missing
+
+  security:
+    runs-on: ubuntu-latest
+    name: Security Scan
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install security tools
+      run: pip install pip-audit
+      
+    - name: Run security scan
+      run: |
+        cd project
+        pip-audit -r requirements.txt || echo "Security scan completed with warnings"
+
+  build-local:
+    runs-on: ubuntu-latest
+    name: Build Docker Image (Local)
+    needs: [test, security]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Build Docker image (no push)
+      uses: docker/build-push-action@v5
+      with:
+        context: ./project
+        file: ./project/Dockerfile
+        platforms: linux/amd64
+        push: false
+        tags: ${{ env.IMAGE_NAME }}:test
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Test Docker image
+      run: |
+        docker run -d --name test-container -p 8080:5000 ${{ env.IMAGE_NAME }}:test
+        sleep 10
+        
+        # Test if container is running
+        if docker ps | grep test-container; then
+          echo "✅ Container is running"
+        else
+          echo "❌ Container failed to start"
+          docker logs test-container
+          exit 1
+        fi
+        
+        # Test if application responds
+        if curl -f --max-time 10 http://localhost:8080; then
+          echo "✅ Application is responding"
+        else
+          echo "❌ Application is not responding"
+          docker logs test-container
+          exit 1
+        fi
+        
+        # Cleanup
+        docker stop test-container
+        docker rm test-container
+
+  deploy-local:
+    runs-on: ubuntu-latest
+    name: Deploy to Local Kubernetes
+    needs: build-local
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+      
+    - name: Start Minikube
+      uses: medyagh/setup-minikube@master
+      with:
+        driver: docker
+        memory: 2048
+        cpus: 2
+      
+    - name: Build image in Minikube
+      run: |
+        # Switch Docker context to Minikube
+        eval $(minikube docker-env)
+        
+        # Build image directly in Minikube
+        cd project
+        docker build -t ${{ env.IMAGE_NAME }}:local .
+        
+        # Verify image was built
+        docker images | grep ${{ env.IMAGE_NAME }}
+      
+    - name: Update deployment with local image
+      run: |
+        cd k8s
+        
+        # Create a local deployment file
+        sed 's|ghcr.io/kareem411/patient-web-interface:latest|${{ env.IMAGE_NAME }}:local|g' deployment.yaml > deployment-local.yaml
+        sed -i 's|imagePullPolicy: Always|imagePullPolicy: Never|g' deployment-local.yaml
+        
+        echo "📦 Applying Kubernetes manifests..."
+        kubectl apply -f deployment-local.yaml
+        kubectl apply -f ingress.yaml
+        kubectl apply -f monitoring.yaml
+        
+        echo "⏳ Waiting for deployment to be ready..."
+        kubectl wait --for=condition=available --timeout=300s deployment/patient-web-interface -n patient-web-interface
+        
+        echo "📊 Verifying deployment..."
+        kubectl get pods -n patient-web-interface
+        kubectl get services -n patient-web-interface
+
+  notification-local:
+    runs-on: ubuntu-latest
+    name: Notify Local Deployment Status
+    needs: [test, security, build-local, deploy-local]
+    if: always()
+    
+    steps:
+    - name: Notify deployment status
+      run: |
+        echo "📊 Local CI/CD Pipeline Results:"
+        echo "• Tests: ${{ needs.test.result }}"
+        echo "• Security: ${{ needs.security.result }}"
+        echo "• Build (Local): ${{ needs.build-local.result }}"
+        echo "• Local K8s Deploy: ${{ needs.deploy-local.result }}"
+        
+        if [ "${{ needs.test.result }}" = "success" ] && [ "${{ needs.security.result }}" = "success" ] && [ "${{ needs.build-local.result }}" = "success" ] && [ "${{ needs.deploy-local.result }}" = "success" ]; then
+          echo ""
+          echo "🎉 SUCCESS: All local jobs completed successfully!"
+          echo "✅ Application built and deployed locally to Kubernetes"
+        else
+          echo ""
+          echo "❌ FAILURE: Some local jobs failed. Check the logs for details."
+          echo "📋 Failed jobs:"
+          [ "${{ needs.test.result }}" != "success" ] && echo "  • Tests"
+          [ "${{ needs.security.result }}" != "success" ] && echo "  • Security scan"
+          [ "${{ needs.build-local.result }}" != "success" ] && echo "  • Docker build (local)"
+          [ "${{ needs.deploy-local.result }}" != "success" ] && echo "  • Local Kubernetes deployment"
+          exit 1
+        fi

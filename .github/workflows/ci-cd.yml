@@ -71,13 +71,13 @@ jobs:
       with:
         python-version: '3.11'
         
-    - name: Install safety
-      run: pip install safety
+    - name: Install security tools
+      run: pip install pip-audit
       
     - name: Run security scan
       run: |
         cd project
-        safety scan -r requirements.txt
+        pip-audit -r requirements.txt --format=text
 
   build:
     runs-on: ubuntu-latest

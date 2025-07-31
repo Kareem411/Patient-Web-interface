@@ -1,4 +1,85 @@
-<h1> {{  Statues }} </h1>
-<body>
-{{ output|safe }}
-</body>
+{% extends "base.html" %}
+
+{% block title %}Search Results - Patient Management System{% endblock %}
+
+{% block content %}
+<div class="results-section">
+    <h2 style="text-align: center; color: #4a5568; margin-bottom: 30px;">📋 Search Results</h2>
+    
+    {% if Statues %}
+        <div class="alert alert-info">
+            <strong>Status:</strong> {{ Statues }}
+        </div>
+    {% endif %}
+    
+    {% if output %}
+        {% if "Cant Find a User" in output %}
+            <div class="alert alert-error">
+                <strong>❌ Patient Not Found:</strong> No patient found with the provided National ID. 
+                Please check the ID and try again, or register a new patient.
+            </div>
+            
+            <div class="card">
+                <h4>🔍 What you can do:</h4>
+                <ul style="margin: 10px 0; padding-left: 20px;">
+                    <li>Double-check the National ID number</li>
+                    <li>Make sure the patient is registered in the system</li>
+                    <li>Try searching with a different ID</li>
+                    <li>Register the patient if they are new to the system</li>
+                </ul>
+                
+                <div style="display: flex; gap: 15px; justify-content: center; margin-top: 20px;">
+                    <a href="/search" class="btn">Search Again</a>
+                    <a href="/signup" class="btn">Register New Patient</a>
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-success">
+                <strong>✅ Patient Found:</strong> Patient record retrieved successfully.
+            </div>
+            
+            <div class="card">
+                <h3 style="margin-bottom: 20px; color: #4a5568;">👤 Patient Information</h3>
+                <div class="patient-info">
+                    {{ output|safe }}
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px;">
+                <a href="/search" class="btn" style="margin-right: 15px;">Search Another Patient</a>
+                <a href="/signup" class="btn btn-secondary">Register New Patient</a>
+            </div>
+        {% endif %}
+    {% else %}
+        <div class="alert alert-info">
+            <strong>ℹ️ No Search Performed:</strong> Please use the search form to find a patient.
+        </div>
+    {% endif %}
+
+    <div style="margin-top: 30px;">
+        <div class="card">
+            <h4>🏠 Navigation:</h4>
+            <div style="display: flex; gap: 15px; justify-content: center; margin-top: 15px;">
+                <a href="/" class="btn">Home</a>
+                <a href="/search" class="btn">Search Patients</a>
+                <a href="/signup" class="btn">Register Patient</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.patient-info {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    border-left: 4px solid #28a745;
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+.patient-info br {
+    margin-bottom: 10px;
+}
+</style>
+{% endblock %}

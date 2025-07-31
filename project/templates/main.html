@@ -1,1 +1,61 @@
-<body>{{ main }}</body>
+{% extends "base.html" %}
+
+{% block title %}Home - Patient Management System{% endblock %}
+
+{% block content %}
+<div class="welcome-section">
+    <h2 style="text-align: center; color: #4a5568; margin-bottom: 30px;">Welcome to Patient Management System</h2>
+    
+    <div class="alert alert-info">
+        <strong>📋 System Overview:</strong> This application helps healthcare professionals manage patient records efficiently. 
+        You can register new patients, search existing records, and maintain a comprehensive database.
+    </div>
+
+    <div class="feature-grid">
+        <div class="feature-card">
+            <div class="feature-icon">👤</div>
+            <h3>Patient Registration</h3>
+            <p>Register new patients with comprehensive information including personal details, contact information, and medical history.</p>
+            <a href="/signup" class="btn" style="margin-top: 15px;">Register New Patient</a>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon">🔍</div>
+            <h3>Patient Search</h3>
+            <p>Quickly find patient records using their National ID. Access all stored information instantly.</p>
+            <a href="/search" class="btn" style="margin-top: 15px;">Search Patients</a>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>Database Management</h3>
+            <p>Secure and reliable patient data storage with SQLite database backend ensuring data integrity.</p>
+            <a href="#" class="btn btn-secondary" style="margin-top: 15px;">View Statistics</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>🔐 Security & Privacy</h3>
+        <p>This system follows healthcare data protection standards. All patient information is stored securely and accessed only by authorized personnel.</p>
+        
+        <h4 style="margin-top: 20px;">Features:</h4>
+        <ul style="margin: 10px 0; padding-left: 20px;">
+            <li>Secure patient data storage</li>
+            <li>Unique National ID-based identification</li>
+            <li>Comprehensive patient profiles</li>
+            <li>Fast search capabilities</li>
+            <li>Responsive web interface</li>
+        </ul>
+    </div>
+
+    <div class="card">
+        <h3>🚀 Getting Started</h3>
+        <p>To begin using the system:</p>
+        <ol style="margin: 10px 0; padding-left: 20px;">
+            <li><strong>Register a Patient:</strong> Click on "Register Patient" to add new patient records</li>
+            <li><strong>Search Records:</strong> Use "Search Patient" to find existing patient information</li>
+            <li><strong>Manage Data:</strong> Update and maintain patient records as needed</li>
+        </ol>
+    </div>
+</div>
+{% endblock %}

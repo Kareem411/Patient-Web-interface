@@ -17,12 +17,12 @@ def client():
 def test_main_page(client):
     response = client.get('/')
     assert response.status_code == 200
-    assert b'Main Page' in response.data
+    assert b'Patient Management System' in response.data
 
 def test_signup_get(client):
     response = client.get('/signup')
     assert response.status_code == 200
-    assert b'Sign Up' in response.data
+    assert b'Patient Registration' in response.data
 
 def test_signup_post_success(client):
     data = {

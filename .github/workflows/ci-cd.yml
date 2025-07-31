@@ -77,7 +77,7 @@ jobs:
     - name: Run security scan
       run: |
         cd project
-        safety check -r requirements.txt
+        safety scan -r requirements.txt
 
   build:
     runs-on: ubuntu-latest

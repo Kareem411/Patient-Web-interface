@@ -1,16 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Search Patient - Patient Management System{% endblock %}
+
 {% block content %}
-
-<h2> Search For a User </h2>
-<form method="POST" action="{{ url_for('search') }}">
-    {{ form.hidden_tag() }}
-    <h1> Search </h1>
-    <div class="form-group">
-        {{ form.NID.label(class="form-control-label") }}
-        {{ form.NID(class="form-control") }}
+<div class="search-section">
+    <h2 style="text-align: center; color: #4a5568; margin-bottom: 30px;">🔍 Patient Search</h2>
+    
+    <div class="alert alert-info">
+        <strong>🔍 Patient Search:</strong> Enter the National ID to search for a patient record. 
+        The system will display all available information for the matching patient.
     </div>
-    <div class="form-group">
-        {{ form.submit(class="btn btn-primary") }}
-    </div>
-</form>
 
-{% endblock content %}
+    <form method="POST" action="{{ url_for('search') }}" style="max-width: 500px; margin: 0 auto 30px auto;">
+        {{ form.hidden_tag() }}
+        
+        <div class="card">
+            <h3 style="margin-bottom: 20px; color: #4a5568;">Search Criteria</h3>
+            
+            <div class="form-group">
+                {{ form.NID.label(class="form-label") }}
+                {{ form.NID(class="form-control", placeholder="Enter National ID to search") }}
+                {% if form.NID.errors %}
+                    <div class="alert alert-error" style="margin-top: 10px;">
+                        {% for error in form.NID.errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div style="text-align: center; margin-top: 20px;">
+                {{ form.submit(class="btn", style="margin-right: 15px;") }}
+                <a href="/" class="btn btn-secondary">Back to Home</a>
+            </div>
+        </div>
+    </form>
+
+    <div style="margin-top: 30px;">
+        <div class="card">
+            <h4>💡 Search Tips:</h4>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li>Enter the exact National ID number</li>
+                <li>Make sure the ID contains only numbers</li>
+                <li>Patient must be registered in the system to be found</li>
+                <li>Search is case-insensitive for better results</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h4>📊 Quick Actions:</h4>
+            <div style="display: flex; gap: 15px; justify-content: center; margin-top: 15px;">
+                <a href="/signup" class="btn">Register New Patient</a>
+                <a href="/" class="btn btn-secondary">View All Features</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

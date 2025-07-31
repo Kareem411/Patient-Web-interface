@@ -1,44 +1,146 @@
-{% block content %}
-<h2> {{ value }}</h2>
-<h2> Sign Up </h2>
+{% extends "base.html" %}
 
-<form method="POST" action="{{ url_for('signup') }}">
-    {{ form.hidden_tag() }}
-    <div class="form-group">
-        {{ form.username.label(class="form-control-label") }}
-        {{ form.username(class="form-control") }}
+{% block title %}Register Patient - Patient Management System{% endblock %}
+
+{% block content %}
+<div class="registration-section">
+    <h2 style="text-align: center; color: #4a5568; margin-bottom: 30px;">👤 Patient Registration</h2>
+    
+    {% if value %}
+        <div class="alert alert-success">
+            <strong>✅ Registration Successful!</strong> {{ value }}
+        </div>
+    {% endif %}
+    
+    <div class="alert alert-info">
+        <strong>📝 Patient Registration:</strong> Please fill in all required fields to register a new patient. 
+        Make sure the National ID is unique and accurate.
     </div>
-    <div class="form-group">
-        {{ form.email.label(class="form-control-label") }}
-        {{ form.email(class="form-control") }}
+
+    <form method="POST" action="{{ url_for('signup') }}" style="max-width: 600px; margin: 0 auto;">
+        {{ form.hidden_tag() }}
+        
+        <div class="card">
+            <h3 style="margin-bottom: 20px; color: #4a5568;">Personal Information</h3>
+            
+            <div class="form-group">
+                {{ form.NID.label(class="form-label") }}
+                {{ form.NID(class="form-control", placeholder="Enter National ID (numbers only)") }}
+                {% if form.NID.errors %}
+                    <div class="alert alert-error" style="margin-top: 10px;">
+                        {% for error in form.NID.errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                {{ form.username.label(class="form-label") }}
+                {{ form.username(class="form-control", placeholder="Enter username") }}
+                {% if form.username.errors %}
+                    <div class="alert alert-error" style="margin-top: 10px;">
+                        {% for error in form.username.errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                {{ form.email.label(class="form-label") }}
+                {{ form.email(class="form-control", placeholder="patient@example.com") }}
+                {% if form.email.errors %}
+                    <div class="alert alert-error" style="margin-top: 10px;">
+                        {% for error in form.email.errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    {{ form.Fname.label(class="form-label") }}
+                    {{ form.Fname(class="form-control", placeholder="First name") }}
+                    {% if form.Fname.errors %}
+                        <div class="alert alert-error" style="margin-top: 10px;">
+                            {% for error in form.Fname.errors %}
+                                <p>{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    {{ form.Lname.label(class="form-label") }}
+                    {{ form.Lname(class="form-control", placeholder="Last name") }}
+                    {% if form.Lname.errors %}
+                        <div class="alert alert-error" style="margin-top: 10px;">
+                            {% for error in form.Lname.errors %}
+                                <p>{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="form-group">
+                {{ form.BD.label(class="form-label") }}
+                {{ form.BD(class="form-control") }}
+                {% if form.BD.errors %}
+                    <div class="alert alert-error" style="margin-top: 10px;">
+                        {% for error in form.BD.errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                {{ form.password.label(class="form-label") }}
+                {{ form.password(class="form-control", placeholder="Enter secure password") }}
+                {% if form.password.errors %}
+                    <div class="alert alert-error" style="margin-top: 10px;">
+                        {% for error in form.password.errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                {{ form.Re_password.label(class="form-label") }}
+                {{ form.Re_password(class="form-control", placeholder="Confirm password") }}
+                {% if form.Re_password.errors %}
+                    <div class="alert alert-error" style="margin-top: 10px;">
+                        {% for error in form.Re_password.errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 30px;">
+            {{ form.submit(class="btn", style="margin-right: 15px;") }}
+            <a href="/" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+
+    <div style="margin-top: 30px;">
+        <div class="card">
+            <h4>📋 Registration Guidelines:</h4>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li>National ID must be unique and contain only numbers</li>
+                <li>Use a strong password for security</li>
+                <li>Provide a valid email address for communication</li>
+                <li>Birth date should be in YYYY-MM-DD format</li>
+                <li>Password confirmation must match the original password</li>
+                <li>All fields are required for complete registration</li>
+            </ul>
+        </div>
     </div>
-    <div class="form-group">
-        {{ form.BD.label(class="form-control-label") }}
-        {{ form.BD(class="form-control") }}
-    </div>
-    <div class="form-group">
-        {{ form.password.label(class="form-control-label") }}
-        {{ form.password(class="form-control") }}
-    </div>
-    <div class="form-group">
-        {{ form.Re_password.label(class="form-control-label") }}
-        {{ form.Re_password(class="form-control") }}
-    </div>
-    <div class="form-group">
-        {{ form.Fname.label(class="form-control-label") }}
-        {{ form.Fname(class="form-control") }}
-    </div>
-    <div class="form-group">
-        {{ form.Lname.label(class="form-control-label") }}
-        {{ form.Lname(class="form-control") }}
-    </div>
-    <div class="form-group">
-        {{ form.NID.label(class="form-control-label") }}
-        {{ form.NID(class="form-control") }}
-    </div>
-    <div class="form-group">
-        {{ form.submit(class="btn btn-primary") }}
-    </div>
-</form>
-{% endblock content %}
+</div>
+{% endblock %}
 

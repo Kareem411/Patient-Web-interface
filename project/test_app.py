@@ -5,12 +5,16 @@ from flask import url_for, template_rendered
 
 @pytest.fixture
 def client():
+    # Configure test settings before creating client
     app.config['TESTING'] = True
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
     app.config['WTF_CSRF_ENABLED'] = False  # Disable CSRF for testing
+    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     
     with app.test_client() as client:
         with app.app_context():
+            # Ensure we're using a fresh database for each test
+            db.drop_all()
             db.create_all()
         yield client
 
@@ -72,7 +76,7 @@ def test_signup_post_duplicate_nid(client):
     
     response = client.post('/signup', data=data2)
     assert response.status_code == 200
-    assert b'This id is aready IN' in response.data
+    assert b'This id is already IN' in response.data
 
 def test_search_found(client):
     # First register a user

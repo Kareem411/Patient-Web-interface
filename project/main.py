@@ -5,7 +5,11 @@ import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', '123456')  # add secret key CSR
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get('DATABASE_URL', 'sqlite:///instance/patient.db')
+
+# Set default database URI, but allow it to be overridden by tests
+if not app.config.get('SQLALCHEMY_DATABASE_URI'):
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get('DATABASE_URL', 'sqlite:///instance/patient.db')
+
 db = SQLAlchemy(app)
 
 
@@ -99,18 +103,25 @@ if __name__ == "__main__":
     import time
     import sys
     
-    # Ensure instance directory exists and is writable
-    instance_dir = os.path.join(os.path.dirname(__file__), 'instance')
-    os.makedirs(instance_dir, exist_ok=True)
-    
-    # Get the database URL and convert relative path to absolute if needed
-    database_url = os.environ.get('DATABASE_URL', 'sqlite:///instance/patient.db')
-    if database_url.startswith('sqlite:///instance/'):
-        # Convert to absolute path
-        db_path = os.path.join(instance_dir, 'patient.db')
-        database_url = f'sqlite:///{db_path}'
-        app.config["SQLALCHEMY_DATABASE_URI"] = database_url
-        print(f"Using database path: {db_path}")
+    # Only modify database path if not already configured for testing
+    if not app.config.get('TESTING', False):
+        # Ensure instance directory exists and is writable
+        instance_dir = os.path.join(os.path.dirname(__file__), 'instance')
+        os.makedirs(instance_dir, exist_ok=True)
+        
+        # Get the database URL and convert relative path to absolute if needed
+        database_url = os.environ.get('DATABASE_URL', 'sqlite:///instance/patient.db')
+        if database_url.startswith('sqlite:///instance/'):
+            # Convert to absolute path
+            db_path = os.path.join(instance_dir, 'patient.db')
+            database_url = f'sqlite:///{db_path}'
+            app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+            print(f"Using database path: {db_path}")
+        elif database_url.startswith('sqlite:////'):
+            # Already absolute path, use as is
+            print(f"Using absolute database path: {database_url}")
+        else:
+            print(f"Using database URL: {database_url}")
     
     # Try to create database with retries, but don't exit if it fails
     max_retries = 3  # Reduced retries

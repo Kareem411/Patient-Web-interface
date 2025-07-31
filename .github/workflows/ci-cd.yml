@@ -181,6 +181,13 @@ jobs:
       with:
         version: 'latest'
       
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+      
     - name: Start Minikube
       uses: medyagh/setup-minikube@master
       with:
@@ -195,7 +202,7 @@ jobs:
         minikube addons enable dashboard
         
         # Wait for ingress controller to be ready
-        echo "⏳ Waiting for NGINX Ingress Controller to be ready..."
+        echo "Waiting for NGINX Ingress Controller to be ready..."
         kubectl wait --namespace ingress-nginx \
           --for=condition=ready pod \
           --selector=app.kubernetes.io/component=controller \
@@ -209,95 +216,157 @@ jobs:
         minikube status
         kubectl cluster-info
         kubectl get nodes
+    
+    - name: Create image pull secret
+      run: |
+        echo "Creating image pull secret for private registry access..."
+        kubectl create namespace patient-web-interface --dry-run=client -o yaml | kubectl apply -f -
+        kubectl create secret docker-registry ghcr-secret \
+          --docker-server=ghcr.io \
+          --docker-username=${{ github.actor }} \
+          --docker-password=${{ secrets.GITHUB_TOKEN }} \
+          --docker-email=${{ github.actor }}@users.noreply.github.com \
+          -n patient-web-interface --dry-run=client -o yaml | kubectl apply -f -
       
     - name: Deploy to Kubernetes
       run: |
         cd k8s
         
-        echo "📦 Applying Kubernetes manifests..."
-        kubectl apply -f deployment.yaml
+        echo "Checking if image is accessible..."
+        echo "Expected image: ghcr.io/kareem411/patient-web-interface:latest"
+        
+        # Try to pull the image to verify it's accessible
+        if docker pull ghcr.io/kareem411/patient-web-interface:latest; then
+          echo "Image is accessible and pulled successfully"
+        else
+          echo "Failed to pull image from registry"
+          echo "Available images in the registry:"
+          echo "This might be due to the image not being public or authentication issues"
+        fi
+        
+        echo "Applying Kubernetes manifests (CI version)..."
+        kubectl apply -f deployment-ci.yaml
         
         # Apply ingress with error handling
-        echo "🌐 Applying Ingress configuration..."
+        echo "Applying Ingress configuration..."
         if kubectl apply -f ingress-simple.yaml; then
-          echo "✅ Ingress applied successfully"
+          echo "Ingress applied successfully"
         elif kubectl apply -f ingress.yaml; then
-          echo "✅ Full ingress applied successfully"
+          echo "Full ingress applied successfully"
         else
-          echo "⚠️ Ingress application failed, continuing without ingress..."
+          echo "Ingress application failed, continuing without ingress..."
           echo "This is common in CI environments. Application will still be accessible via port-forward or NodePort."
         fi
         
         # Apply monitoring resources with error handling
-        echo "📊 Applying monitoring configuration..."
+        echo "Applying monitoring configuration..."
         if kubectl apply -f monitoring-ci.yaml; then
-          echo "✅ CI monitoring resources applied successfully"
+          echo "CI monitoring resources applied successfully"
         elif kubectl apply -f monitoring.yaml; then
-          echo "✅ Full monitoring resources applied successfully"
+          echo "Full monitoring resources applied successfully"
         else
-          echo "⚠️ Monitoring application failed, continuing without monitoring..."
+          echo "Monitoring application failed, continuing without monitoring..."
           echo "This is common in CI environments without Prometheus Operator."
         fi
         
-        echo "⏳ Waiting for deployment to be ready..."
-        kubectl wait --for=condition=available --timeout=300s deployment/patient-web-interface -n patient-web-interface
+        echo "Waiting for deployment to be ready..."
+        kubectl wait --for=condition=available --timeout=600s deployment/patient-web-interface -n patient-web-interface
         
-        echo "📊 Verifying deployment..."
+        echo "Verifying deployment..."
         kubectl get pods -n patient-web-interface
         kubectl get services -n patient-web-interface
         kubectl get ingress -n patient-web-interface 2>/dev/null || echo "No ingress resources found"
       
     - name: Test Kubernetes deployment
       run: |
-        echo "🧪 Testing application accessibility..."
+        echo "Testing application accessibility..."
         
-        # Get pod status first
-        kubectl get pods -n patient-web-interface -l app=patient-web-interface
+        # Get detailed pod status first
+        echo "Current pod status:"
+        kubectl get pods -n patient-web-interface -l app=patient-web-interface -o wide
+        
+        echo "Pod descriptions:"
+        kubectl describe pods -l app=patient-web-interface -n patient-web-interface
+        
+        # Check events for any issues
+        echo "Recent events:"
+        kubectl get events -n patient-web-interface --sort-by='.firstTimestamp' | tail -20
         
         # Check if pods are running
-        if kubectl wait --for=condition=ready pod -l app=patient-web-interface -n patient-web-interface --timeout=60s; then
-          echo "✅ Pods are ready!"
+        if kubectl wait --for=condition=ready pod -l app=patient-web-interface -n patient-web-interface --timeout=120s; then
+          echo "Pods are ready!"
+          
+          # Show pod logs before testing
+          echo "Pod logs:"
+          kubectl logs -l app=patient-web-interface -n patient-web-interface --tail=20
           
           # Set up port forwarding in background
           kubectl port-forward service/patient-web-interface-service 8080:80 -n patient-web-interface &
           PF_PID=$!
           
           # Wait for port forwarding to be ready
-          sleep 15
+          sleep 20
           
           # Test if application is responding
-          if curl -f --max-time 30 http://localhost:8080; then
-            echo "✅ Application is accessible via port forwarding!"
+          echo "Testing application response..."
+          if curl -f --max-time 30 -v http://localhost:8080; then
+            echo "Application is accessible via port forwarding!"
+            
+            # Test the health endpoint
+            if curl -f --max-time 30 http://localhost:8080/health; then
+              echo "Health endpoint is working!"
+            else
+              echo "Health endpoint failed, but main page works"
+            fi
           else
-            echo "❌ Application is not accessible, checking logs..."
+            echo "Application is not accessible, checking logs..."
             kubectl logs -l app=patient-web-interface -n patient-web-interface --tail=50
+            
+            echo "Service endpoints:"
+            kubectl get endpoints -n patient-web-interface
+            
+            echo "Service details:"
+            kubectl describe service/patient-web-interface-service -n patient-web-interface
           fi
           
           # Clean up port forwarding
           kill $PF_PID 2>/dev/null || true
         else
-          echo "❌ Pods are not ready, checking logs..."
-          kubectl describe pods -l app=patient-web-interface -n patient-web-interface
-          kubectl logs -l app=patient-web-interface -n patient-web-interface --tail=50
+          echo "Pods are not ready, checking detailed status..."
+          
+          echo "Pod status:"
+          kubectl get pods -l app=patient-web-interface -n patient-web-interface -o yaml
+          
+          echo "Pod logs:"
+          kubectl logs -l app=patient-web-interface -n patient-web-interface --tail=100
+          
+          echo "Image pull status:"
+          kubectl describe pods -l app=patient-web-interface -n patient-web-interface | grep -A 10 -B 5 "Image"
+          
+          # Try to debug image pull issues
+          echo "Checking image pull secrets:"
+          kubectl get pods -l app=patient-web-interface -n patient-web-interface -o jsonpath='{.items[*].spec.imagePullSecrets}'
+          
+          exit 1
         fi
       
     - name: Get deployment information
       run: |
-        echo "📋 Deployment Summary:"
+        echo "Deployment Summary:"
         kubectl get all -n patient-web-interface
         
         echo ""
-        echo "🌐 Access Information:"
+        echo "Access Information:"
         echo "• Port Forward: kubectl port-forward service/patient-web-interface-service 8080:80 -n patient-web-interface"
         echo "• Minikube Service: minikube service patient-web-interface-service -n patient-web-interface"
         echo "• Dashboard: minikube dashboard"
         
         echo ""
-        echo "📊 Resource Usage:"
+        echo "Resource Usage:"
         kubectl top pods -n patient-web-interface || echo "Metrics not available yet"
         
         echo ""
-        echo "🔍 HPA Status:"
+        echo "HPA Status:"
         kubectl get hpa -n patient-web-interface
 
   notification:
@@ -310,7 +379,7 @@ jobs:
     - name: Notify deployment status
       if: github.event_name != 'pull_request'
       run: |
-        echo "📊 CI/CD Pipeline Results:"
+        echo "CI/CD Pipeline Results:"
         echo "• Tests: ${{ needs.test.result }}"
         echo "• Security: ${{ needs.security.result }}"
         echo "• Build: ${{ needs.build.result }}"
@@ -318,13 +387,13 @@ jobs:
         
         if [ "${{ needs.test.result }}" = "success" ] && [ "${{ needs.security.result }}" = "success" ] && [ "${{ needs.build.result }}" = "success" ] && [ "${{ needs.deploy-production.result }}" = "success" ]; then
           echo ""
-          echo "🎉 SUCCESS: All jobs completed successfully!"
-          echo "✅ Application deployed to Kubernetes (Minikube)"
-          echo "🌐 Access via: kubectl port-forward service/patient-web-interface-service 8080:80 -n patient-web-interface"
+          echo "SUCCESS: All jobs completed successfully!"
+          echo "Application deployed to Kubernetes (Minikube)"
+          echo "Access via: kubectl port-forward service/patient-web-interface-service 8080:80 -n patient-web-interface"
         else
           echo ""
-          echo "❌ FAILURE: Some jobs failed. Check the logs for details."
-          echo "📋 Failed jobs:"
+          echo "FAILURE: Some jobs failed. Check the logs for details."
+          echo "Failed jobs:"
           [ "${{ needs.test.result }}" != "success" ] && echo "  • Tests"
           [ "${{ needs.security.result }}" != "success" ] && echo "  • Security scan"
           [ "${{ needs.build.result }}" != "success" ] && echo "  • Docker build"

@@ -1,4 +1,5 @@
-# Patient Web Interface - Kubernetes Namespace
+# CI/CD specific deployment configuration
+# This version uses the GitHub Container Registry image with public access
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -6,7 +7,7 @@ metadata:
   labels:
     name: patient-web-interface
     app: patient-web-interface
-    environment: production
+    environment: ci
 ---
 # ConfigMap for application configuration
 apiVersion: v1
@@ -36,7 +37,7 @@ data:
   # echo -n "your-secret-key-change-this" | base64
   SECRET_KEY: eW91ci1zZWNyZXQta2V5LWNoYW5nZS10aGlz
 ---
-# PersistentVolume for SQLite database
+# PersistentVolume for SQLite database (using hostPath for CI)
 apiVersion: v1
 kind: PersistentVolume
 metadata:
@@ -48,7 +49,7 @@ spec:
     storage: 1Gi
   accessModes:
     - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
+  persistentVolumeReclaimPolicy: Delete  # Changed to Delete for CI
   storageClassName: local-storage
   hostPath:
     path: /tmp/patient-db
@@ -69,7 +70,7 @@ spec:
       storage: 1Gi
   storageClassName: local-storage
 ---
-# Deployment for Patient Web Interface
+# Deployment for Patient Web Interface (CI version)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -78,8 +79,9 @@ metadata:
   labels:
     app: patient-web-interface
     version: v1.0.0
+    environment: ci
 spec:
-  replicas: 2
+  replicas: 1  # Reduced replicas for CI
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -145,24 +147,24 @@ spec:
             memory: "128Mi"
             cpu: "100m"
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "256Mi"  # Reduced for CI
+            cpu: "250m"      # Reduced for CI
         livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 60  # Increased for CI
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 5
+        readinessProbe:
           httpGet:
             path: /
             port: 5000
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
-          failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /
-            port: 5000
-          initialDelaySeconds: 5
-          periodSeconds: 5
-          timeoutSeconds: 3
-          failureThreshold: 3
+          failureThreshold: 5
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
@@ -175,6 +177,8 @@ spec:
       restartPolicy: Always
       securityContext:
         fsGroup: 1000
+      imagePullSecrets:
+      - name: ghcr-secret
 ---
 # Service for Patient Web Interface
 apiVersion: v1
@@ -194,7 +198,7 @@ spec:
     targetPort: 5000
     protocol: TCP
 ---
-# Horizontal Pod Autoscaler
+# Horizontal Pod Autoscaler (simplified for CI)
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
@@ -207,35 +211,26 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: patient-web-interface
-  minReplicas: 2
-  maxReplicas: 10
+  minReplicas: 1  # Reduced for CI
+  maxReplicas: 2  # Reduced for CI
   metrics:
   - type: Resource
     resource:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
+        averageUtilization: 80  # Higher threshold for CI
   behavior:
     scaleDown:
       stabilizationWindowSeconds: 300
       policies:
       - type: Percent
-        value: 10
+        value: 50
         periodSeconds: 60
     scaleUp:
-      stabilizationWindowSeconds: 0
+      stabilizationWindowSeconds: 60
       policies:
       - type: Percent
         value: 100
-        periodSeconds: 15
-      - type: Pods
-        value: 4
-        periodSeconds: 15
+        periodSeconds: 30
       selectPolicy: Max

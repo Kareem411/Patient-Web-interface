@@ -96,7 +96,7 @@ spec:
     spec:
       containers:
       - name: patient-web-interface
-        image: abdallahbagato/patient-web-interface:latest
+        image: ghcr.io/kareem411/patient-web-interface:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 5000

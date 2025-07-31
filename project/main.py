@@ -82,7 +82,27 @@ def search():
 
 
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
+    import time
+    import sys
+    
+    # Ensure instance directory exists and is writable
+    instance_dir = os.path.join(os.path.dirname(__file__), 'instance')
+    os.makedirs(instance_dir, exist_ok=True)
+    
+    # Try to create database with retries
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            with app.app_context():
+                db.create_all()
+            print(f"Database initialized successfully on attempt {attempt + 1}")
+            break
+        except Exception as e:
+            print(f"Database initialization attempt {attempt + 1} failed: {e}")
+            if attempt == max_retries - 1:
+                print("Failed to initialize database after all retries")
+                sys.exit(1)
+            time.sleep(2)  # Wait 2 seconds before retry
+    
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port, debug=True)
